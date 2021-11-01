@@ -11,6 +11,11 @@ import (
 )
 
 func main() {
+	if len(os.Args) < 3 {
+		fmt.Printf("Usage: %s <serverip:port> <rcon command>", os.Args[0])
+		return
+	}
+
 	server := os.Args[1]
 	cmd := strings.Join(os.Args[2:], " ")
 
