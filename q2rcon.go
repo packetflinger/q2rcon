@@ -21,7 +21,6 @@ func main() {
 
 	password := LoadRCONPassword()
 	stub := fmt.Sprintf("rcon %s ", password)
-
 	p := make([]byte, 1500)
 
 	// only use IPv4
@@ -64,17 +63,5 @@ func LoadRCONPassword() string {
 		panic(err)
 	}
 
-	// only match "=" as a delimiter
-	delim := func(c rune) bool {
-		return c == '='
-	}
-
-	passwordfields := strings.FieldsFunc(string(pwdata), delim)
-	if len(passwordfields) < 2 {
-		panic("Invalid rcon password file")
-	}
-
-	// remove common whitespace from both sides
-	password := strings.Trim(passwordfields[1], " \n\t")
-	return password
+	return strings.Trim(string(pwdata), " \n\t")
 }
