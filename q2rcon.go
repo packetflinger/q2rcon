@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"net"
 	"os"
@@ -11,19 +12,25 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 3 {
-		fmt.Printf("Usage: %s <serverip:port> <rcon command>", os.Args[0])
+	passwordfile := flag.String("config", ".q2rcon", "The file containing the rcon password")
+
+	flag.Parse()
+	server := flag.Arg(0)
+	cmd := strings.Join(flag.Args()[1:], " ")
+
+	if cmd == "" {
+		fmt.Printf("Usage: %s [-config=rconfile] <serverip[:port]> <rcon command>\n", os.Args[0])
 		return
 	}
 
-	server := os.Args[1]
-	cmd := strings.Join(os.Args[2:], " ")
+	password := LoadRCONPassword(*passwordfile)
 
-	password := LoadRCONPassword()
 	stub := fmt.Sprintf("rcon %s ", password)
 	p := make([]byte, 1500)
 
-	// only use IPv4
+	if !strings.Contains(server, ":") {
+		server = server + ":27910"
+	}
 	conn, err := net.Dial("udp4", server)
 	if err != nil {
 		fmt.Printf("Connection error %v", err)
@@ -49,15 +56,15 @@ func main() {
 }
 
 /**
- * Look in ~/.q2rcon for a password
+ * Look in rconfile for a password
  */
-func LoadRCONPassword() string {
+func LoadRCONPassword(rconfile string) string {
 	user, err := user.Current()
 	if err != nil {
 		panic(err)
 	}
 
-	pwfile := fmt.Sprintf("%s%c%s", user.HomeDir, os.PathSeparator, ".q2rcon")
+	pwfile := fmt.Sprintf("%s%c%s", user.HomeDir, os.PathSeparator, rconfile)
 	pwdata, err := os.ReadFile(pwfile)
 	if err != nil {
 		panic(err)
