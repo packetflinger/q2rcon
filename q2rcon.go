@@ -29,7 +29,6 @@ func main() {
 	}
 
 	password := LoadRCONPassword(*passwordfile)
-	fmt.Printf("password: %s\n", password)
 
 	stub := fmt.Sprintf("rcon %s ", password)
 	p := make([]byte, 1500)
@@ -86,5 +85,4 @@ func LoadRCONPassword(rconfile string) string {
 
 func Usage() {
 	fmt.Printf("Usage: %s [-config=rconfile] <serverip[:port]> <rcon command>\n", os.Args[0])
-	return
 }
