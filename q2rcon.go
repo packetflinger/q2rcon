@@ -12,6 +12,11 @@ import (
 )
 
 func main() {
+	if len(os.Args) < 3 {
+		Usage()
+		return
+	}
+
 	passwordfile := flag.String("config", ".q2rcon", "The file containing the rcon password")
 
 	flag.Parse()
@@ -19,11 +24,12 @@ func main() {
 	cmd := strings.Join(flag.Args()[1:], " ")
 
 	if cmd == "" {
-		fmt.Printf("Usage: %s [-config=rconfile] <serverip[:port]> <rcon command>\n", os.Args[0])
+		Usage()
 		return
 	}
 
 	password := LoadRCONPassword(*passwordfile)
+	fmt.Printf("password: %s\n", password)
 
 	stub := fmt.Sprintf("rcon %s ", password)
 	p := make([]byte, 1500)
@@ -67,8 +73,18 @@ func LoadRCONPassword(rconfile string) string {
 	pwfile := fmt.Sprintf("%s%c%s", user.HomeDir, os.PathSeparator, rconfile)
 	pwdata, err := os.ReadFile(pwfile)
 	if err != nil {
-		panic(err)
+		// problems with rcon file, try environment variable
+		pw := os.Getenv("RCON")
+		if pw == "" {
+			panic(err)
+		}
+		return pw
 	}
 
 	return strings.Trim(string(pwdata), " \n\t")
+}
+
+func Usage() {
+	fmt.Printf("Usage: %s [-config=rconfile] <serverip[:port]> <rcon command>\n", os.Args[0])
+	return
 }
