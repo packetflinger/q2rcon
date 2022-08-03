@@ -157,7 +157,7 @@ func LoadRCONPassword(rconfile string, lookup string) string {
 }
 
 func Usage() {
-	fmt.Printf("Usage: %s [-v] [-p password_profile] <(serverip[:port])|(aliase)> <rcon command>\n", os.Args[0])
+	fmt.Printf("Usage: %s [-v] [-p password_profile] <(serverip[:port])|(alias)> <rcon command>\n", os.Args[0])
 }
 
 /**
