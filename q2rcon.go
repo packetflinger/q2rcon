@@ -5,29 +5,38 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log"
 	"net"
 	"os"
-	"os/user"
 	"strings"
 	"time"
 )
 
-const (
-	PasswordFile string = ".q2rcon"
-	AliasFile    string = ".q2info"
-	PasswordENV  string = "RCON" // environment variable
-)
-
 //
-// Structure for rcon passwords
+// structure to hold our config file ~/.q2servers.json
 //
-type JSONData struct {
-	Profiles []struct {
+type ServerJSON struct {
+	Passwords []struct {
 		Name     string `JSON:"name"`
 		Password string `JSON:"password"`
-		Default  bool   `JSON:"default"`
-	} `JSON:"profiles"`
+	} `JSON:"passwords"`
+
+	Servers []struct {
+		Name     string `JSON:"name"`
+		Groups   string `JSON:"groups"`
+		Addr     string `JSON:"addr"`
+		Password string `JSON:"password"`
+		SSHHost  string `JSON:"sshhost"`
+	} `JSON:"servers"`
 }
+
+type Server struct {
+	Name     string
+	Addr     string
+	Password string
+}
+
+var Config ServerJSON
 
 // flag
 var Verbose *bool
@@ -36,52 +45,17 @@ var Verbose *bool
 // Start here
 //
 func main() {
-	if len(os.Args) < 3 {
-		Usage()
-		return
-	}
-
-	Verbose = flag.Bool("v", false, "Show verbose output")
-	passwordfile := flag.String("config", PasswordFile, "The file containing the rcon password")
-	profile := flag.String("p", "", "The rcon password to use")
-
-	flag.Parse()
-	server := flag.Arg(0)
-	cmd := strings.Join(flag.Args()[1:], " ")
-
-	if cmd == "" {
-		Usage()
-		return
-	}
-
-	dirname, err := os.UserHomeDir()
-	if err == nil {
-		aliasfile := fmt.Sprintf("%s/%s", dirname, AliasFile)
-		server = GetAlias(aliasfile, server)
-		if *Verbose {
-			fmt.Printf("** looking up servername in alias file %s: %s\n", aliasfile, server)
-		}
-	}
-
-	password := LoadRCONPassword(*passwordfile, *profile)
-	if password == "" {
-		fmt.Println("Unable to locate a valid rcon password")
-		return
-	}
-
-	if *Verbose {
-		fmt.Printf("** using rcon password %s\n", ObfuscatePassword(password))
-	}
-
-	stub := fmt.Sprintf("rcon %s ", password)
+	serverlookup := flag.Arg(0)
+	server := GetServer(serverlookup)
+	stub := fmt.Sprintf("rcon %s ", server.Password)
 	p := make([]byte, 1500)
 
 	// append the port if we need to
-	if !strings.Contains(server, ":") {
-		server = server + ":27910"
+	if !strings.Contains(server.Addr, ":") {
+		server.Addr = server.Addr + ":27910"
 	}
 
-	conn, err := net.Dial("udp4", server)
+	conn, err := net.Dial("udp4", server.Addr)
 	if err != nil {
 		fmt.Printf("Connection error %v", err)
 		return
@@ -91,6 +65,13 @@ func main() {
 	// 1 second (1000ms) timeout seems short,
 	// but normal clients are talking with < 100ms RTT
 	conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+
+	cmd := strings.Join(flag.Args()[1:], " ")
+
+	if cmd == "" {
+		Usage()
+		return
+	}
 
 	rconcmd := []byte{0xff, 0xff, 0xff, 0xff}
 	rconcmd = append(rconcmd, stub...)
@@ -108,90 +89,8 @@ func main() {
 	}
 }
 
-/**
- * Look in rconfile for a password
- */
-func LoadRCONPassword(rconfile string, lookup string) string {
-	safelookup := strings.Trim(lookup, " ")
-	user, err := user.Current()
-	if err != nil {
-		panic(err)
-	}
-
-	pwfile := fmt.Sprintf("%s%c%s", user.HomeDir, os.PathSeparator, rconfile)
-	pwdata, err := os.ReadFile(pwfile)
-	if err != nil {
-		if *Verbose {
-			fmt.Printf("** password file %s not found\n", pwfile)
-			fmt.Printf("** trying environment variable %s\n", PasswordENV)
-		}
-
-		// problems with rcon file, try environment variable
-		pw := os.Getenv(PasswordENV)
-		if pw == "" {
-			panic(err)
-		}
-		return pw
-	}
-
-	if *Verbose {
-		fmt.Printf("** reading password file %s\n", pwfile)
-	}
-
-	var profiles JSONData
-
-	if err = json.Unmarshal(pwdata, &profiles); err != nil {
-		fmt.Printf("error parsing %s: %s\n", pwfile, err.Error())
-	}
-
-	for _, p := range profiles.Profiles {
-		if safelookup == "" && p.Default {
-			return p.Password
-		}
-
-		if p.Name == safelookup {
-			return p.Password
-		}
-	}
-	return ""
-}
-
 func Usage() {
-	fmt.Printf("Usage: %s [-v] [-p password_profile] <(serverip[:port])|(alias)> <rcon command>\n", os.Args[0])
-}
-
-/**
- * Find lookup in aliasfile
- */
-func GetAlias(aliasfile string, lookup string) string {
-	raw, err := os.ReadFile(aliasfile)
-	if err != nil {
-		return lookup
-	}
-
-	lines := strings.Split(string(raw), "\n")
-	for _, line := range lines {
-		trimmedline := strings.TrimSpace(line)
-		if trimmedline == "" {
-			continue
-		}
-
-		if strings.HasPrefix(trimmedline, "#") {
-			continue
-		}
-
-		if strings.HasPrefix(trimmedline, "//") {
-			continue
-		}
-
-		alias := strings.Fields(line)
-
-		if alias[0] == lookup {
-			return alias[1]
-		}
-	}
-
-	return lookup
+	fmt.Printf("Usage: %s <server alias> <rcon command>\n", os.Args[0])
 }
 
 //
@@ -213,4 +112,64 @@ func ObfuscatePassword(input string) string {
 	}
 
 	return string(runeinput)
+}
+
+//
+// Find the password linked with a particular server
+//
+func GetPassword(alias string) string {
+	for _, p := range Config.Passwords {
+		if p.Name == alias {
+			return p.Password
+		}
+	}
+
+	return "couldntfinerconpassword"
+}
+
+//
+// Return a struct representing a specific server
+//
+func GetServer(alias string) Server {
+	for _, s := range Config.Servers {
+		if s.Name == alias {
+			srv := Server{
+				Name:     s.Name,
+				Addr:     s.Addr,
+				Password: GetPassword(s.Password),
+			}
+			return srv
+		}
+	}
+
+	return Server{}
+}
+
+//
+// Called before main()
+//
+func init() {
+	if len(os.Args) < 3 {
+		Usage()
+		return
+	}
+
+	flag.Parse()
+
+	homedir, err := os.UserHomeDir()
+	sep := os.PathSeparator
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	configfile := fmt.Sprintf("%s%c.q2servers.json", homedir, sep)
+	raw, err := os.ReadFile(configfile)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = json.Unmarshal(raw, &Config)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
