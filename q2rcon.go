@@ -81,16 +81,18 @@ func main() {
 	rconcmd := []byte{0xff, 0xff, 0xff, 0xff}
 	rconcmd = append(rconcmd, stub...)
 	rconcmd = append(rconcmd, cmd...)
+
 	timestart := time.Now()
 	fmt.Fprintln(conn, string(rconcmd))
-
 	length, err := bufio.NewReader(conn).Read(p)
 	duration := time.Since(timestart)
+
 	if err != nil {
 		fmt.Printf("Read error: %s\n", err)
 		return
 	}
 
+	// skip the 10 char preamble (ÿÿÿÿprint\n)
 	if length > 11 {
 		fmt.Println(string(p[10:]))
 	}
@@ -206,7 +208,7 @@ func init() {
 	}
 
 	if *Verbose {
-		log.Printf("  %d passwords\n", len(Config.Passwords))
-		log.Printf("  %d servers\n", len(Config.Servers))
+		log.Printf("  %d passwords found\n", len(Config.Passwords))
+		log.Printf("  %d servers found\n", len(Config.Servers))
 	}
 }
