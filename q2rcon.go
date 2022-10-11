@@ -128,7 +128,7 @@ func ObfuscatePassword(input string) string {
 //
 func GetPassword(alias string) (string, error) {
 	for _, p := range Config.Passwords {
-		if p.Name == alias {
+		if strings.EqualFold(p.Name, alias) {
 			return p.Password, nil
 		}
 	}
@@ -141,7 +141,7 @@ func GetPassword(alias string) (string, error) {
 //
 func GetServer(alias string) (Server, error) {
 	for _, s := range Config.Servers {
-		if s.Name == alias {
+		if strings.EqualFold(s.Name, alias) {
 			actualpassword, err := GetPassword(s.Password)
 			if err != nil {
 				return Server{}, err
