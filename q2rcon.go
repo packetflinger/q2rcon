@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -30,23 +31,32 @@ type ServerJSON struct {
 	} `JSON:"servers"`
 }
 
+//
+// Temp server structure. All info needed for sending rcon msgs
+//
 type Server struct {
 	Name     string
 	Addr     string
 	Password string
 }
 
-var Config ServerJSON
-
-// flag
-var Verbose *bool
+var (
+	Config  ServerJSON
+	SrvFile *string // flag
+	Verbose *bool   // flag
+)
 
 //
 // Start here
 //
 func main() {
 	serverlookup := flag.Arg(0)
-	server := GetServer(serverlookup)
+	server, err := GetServer(serverlookup)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
 	stub := fmt.Sprintf("rcon %s ", server.Password)
 	p := make([]byte, 1500)
 
@@ -68,17 +78,14 @@ func main() {
 
 	cmd := strings.Join(flag.Args()[1:], " ")
 
-	if cmd == "" {
-		Usage()
-		return
-	}
-
 	rconcmd := []byte{0xff, 0xff, 0xff, 0xff}
 	rconcmd = append(rconcmd, stub...)
 	rconcmd = append(rconcmd, cmd...)
+	timestart := time.Now()
 	fmt.Fprintln(conn, string(rconcmd))
 
 	length, err := bufio.NewReader(conn).Read(p)
+	duration := time.Since(timestart)
 	if err != nil {
 		fmt.Printf("Read error: %s\n", err)
 		return
@@ -87,10 +94,10 @@ func main() {
 	if length > 11 {
 		fmt.Println(string(p[10:]))
 	}
-}
 
-func Usage() {
-	fmt.Printf("Usage: %s <server alias> <rcon command>\n", os.Args[0])
+	if *Verbose {
+		log.Printf("Results fetched in %s\n", duration.String())
+	}
 }
 
 //
@@ -117,53 +124,78 @@ func ObfuscatePassword(input string) string {
 //
 // Find the password linked with a particular server
 //
-func GetPassword(alias string) string {
+func GetPassword(alias string) (string, error) {
 	for _, p := range Config.Passwords {
 		if p.Name == alias {
-			return p.Password
+			return p.Password, nil
 		}
 	}
 
-	return "couldntfinerconpassword"
+	return "", errors.New("Couldn't locate password tagged as " + alias)
 }
 
 //
 // Return a struct representing a specific server
 //
-func GetServer(alias string) Server {
+func GetServer(alias string) (Server, error) {
 	for _, s := range Config.Servers {
 		if s.Name == alias {
+			actualpassword, err := GetPassword(s.Password)
+			if err != nil {
+				return Server{}, err
+			}
+
 			srv := Server{
 				Name:     s.Name,
 				Addr:     s.Addr,
-				Password: GetPassword(s.Password),
+				Password: actualpassword,
 			}
-			return srv
+
+			if *Verbose {
+				log.Printf("Querying %s [%s] using password %s\n",
+					srv.Name,
+					srv.Addr,
+					ObfuscatePassword(srv.Password),
+				)
+			}
+			return srv, nil
 		}
 	}
 
-	return Server{}
+	return Server{}, errors.New("unknown server")
 }
 
 //
 // Called before main()
 //
 func init() {
-	if len(os.Args) < 3 {
-		Usage()
-		return
-	}
 
+	// parse args
+	SrvFile = flag.String("c", "", "Specify a server data file")
+	Verbose = flag.Bool("v", false, "Show some more info")
 	flag.Parse()
 
-	homedir, err := os.UserHomeDir()
-	sep := os.PathSeparator
-	if err != nil {
-		log.Fatal(err)
+	if len(flag.Args()) < 2 {
+		fmt.Printf("Usage: %s <flags> <serveralias> <rcon command>\n", os.Args[0])
+		fmt.Printf("  flags:\n")
+		flag.PrintDefaults()
+		os.Exit(0)
 	}
 
-	configfile := fmt.Sprintf("%s%c.q2servers.json", homedir, sep)
-	raw, err := os.ReadFile(configfile)
+	if *SrvFile == "" {
+		homedir, err := os.UserHomeDir()
+		sep := os.PathSeparator
+		if err != nil {
+			log.Fatal(err)
+		}
+		*SrvFile = fmt.Sprintf("%s%c.q2servers.json", homedir, sep)
+	}
+
+	if *Verbose {
+		log.Printf("Loading passwords/servers from %s\n", *SrvFile)
+	}
+
+	raw, err := os.ReadFile(*SrvFile)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -171,5 +203,10 @@ func init() {
 	err = json.Unmarshal(raw, &Config)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if *Verbose {
+		log.Printf("  %d passwords\n", len(Config.Passwords))
+		log.Printf("  %d servers\n", len(Config.Servers))
 	}
 }
