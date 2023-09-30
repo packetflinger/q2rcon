@@ -4,11 +4,11 @@ A command line out-of-band management client for Quake 2.
 ## Config File
 Servers, passwords and mappings are done via the config file `.q2servers.config`
 in your home directory. This file is used by other programs as well 
-so it might contain more inforamation than is strictly needed for this
+so it might contain more information than is strictly needed for this
 utility.
 
 The config file is a text-format protobuf. The proto it implements is
-https://github.com/packetflinger/libq2/proto/servers_file.proto
+https://github.com/packetflinger/libq2/blob/main/proto/servers_file.proto
 
 You can have as many `password` and `server` stanzas as you like. Example:
 ```
@@ -37,9 +37,6 @@ via the command line for security reasons.
 ```
 q2rcon [--config <alternate_configfile>] <server_name> <console_cmd>`
 ```
-
-The `-v` flag is for verbose output, giving you slightly more info. The `-c`
-flag is to specify a config file other than `~/.q2server.json`.
 
 The `<server_name>` argument matches the "name" field in the server definitions.
 The `<console_cmd>` argument is the command you would normally enter into
