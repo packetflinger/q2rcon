@@ -92,12 +92,13 @@ func loadConfig() (*pb.ServerFile, error) {
 	return cfg, nil
 }
 
-// Attempt to match the target arg to an identifier in the server config.
+// Attempt to match the target arg to an identifier in the server config. This
+// should be a case-insensitive match.
 //
 // Returns the password, ip/host, port, and any errors
 func resolveTarget(cfg *pb.ServerFile, targ string) (string, string, int, error) {
 	for _, sv := range cfg.GetServer() {
-		if sv.GetIdentifier() == strings.ToLower(targ) {
+		if strings.EqualFold(sv.GetIdentifier(), targ) {
 			for _, pw := range cfg.GetPassword() {
 				if pw.Identifier == sv.GetRconPassword() {
 					tokens := strings.Split(sv.GetAddress(), ":")
